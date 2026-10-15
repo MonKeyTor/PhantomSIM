@@ -1,0 +1,797 @@
+<title>Phantomfehler-Simulation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+
+<style>
+  /* Industrial heating-pipe aesthetic — copper wire on steel */
+  :root {
+    --bg: #f5f3f0;
+    --bg-card: #ffffff;
+    --fg: #1a1a1a;
+    --fg-muted: #6b6560;
+    --fg-label: #8a847d;
+    --border: #e0dbd5;
+    --pipe: #8c9196;
+    --pipe-light: #b5bac0;
+    --wire: #c87533;
+    --wire-light: #e8a85c;
+    --fault-1: #d94040;
+    --fault-2: #c43535;
+    --phantom: #e88a1a;
+    --phantom-glow: rgba(232, 138, 26, 0.25);
+    --accent: #2a7a5a;
+    --accent-light: rgba(42, 122, 90, 0.08);
+    --insulation: #d4cfc8;
+    --slider-track: #d4cfc8;
+    --slider-fill: var(--wire);
+    --input-bg: #f9f7f5;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1a1917;
+      --bg-card: #252422;
+      --fg: #e8e4de;
+      --fg-muted: #9a9590;
+      --fg-label: #7a756f;
+      --border: #3a3835;
+      --pipe: #6a7078;
+      --pipe-light: #8a9098;
+      --wire: #d48a40;
+      --wire-light: #e8a85c;
+      --fault-1: #e55050;
+      --fault-2: #d44545;
+      --phantom: #f0a030;
+      --phantom-glow: rgba(240, 160, 48, 0.2);
+      --accent: #3aaa7a;
+      --accent-light: rgba(58, 170, 122, 0.1);
+      --insulation: #3a3835;
+      --slider-track: #3a3835;
+      --slider-fill: var(--wire);
+      --input-bg: #2e2c29;
+      --shadow: 0 1px 3px rgba(0,0,0,0.2);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1917;
+    --bg-card: #252422;
+    --fg: #e8e4de;
+    --fg-muted: #9a9590;
+    --fg-label: #7a756f;
+    --border: #3a3835;
+    --pipe: #6a7078;
+    --pipe-light: #8a9098;
+    --wire: #d48a40;
+    --wire-light: #e8a85c;
+    --fault-1: #e55050;
+    --fault-2: #d44545;
+    --phantom: #f0a030;
+    --phantom-glow: rgba(240, 160, 48, 0.2);
+    --accent: #3aaa7a;
+    --accent-light: rgba(58, 170, 122, 0.1);
+    --insulation: #3a3835;
+    --slider-track: #3a3835;
+    --slider-fill: var(--wire);
+    --input-bg: #2e2c29;
+    --shadow: 0 1px 3px rgba(0,0,0,0.2);
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: clamp(1.25rem, 3vw, 1.5rem);
+    font-weight: 700;
+    margin: 1.5rem 0 0.25rem;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  .subtitle {
+    font-size: 0.85rem;
+    color: var(--fg-muted);
+    margin: 0 0 1.25rem;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
+  }
+  .card-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-label);
+    margin-bottom: 0.75rem;
+  }
+
+  /* SVG diagram */
+  .diagram-wrap {
+    overflow-x: auto;
+    margin: 0 -0.5rem;
+    padding: 0 0.5rem;
+  }
+  svg.pipe-diagram {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Slider controls */
+  .controls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .control-group label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--fg-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .control-group label .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .control-group label .val.fault-1-color { color: var(--fault-1); }
+  .control-group label .val.fault-2-color { color: var(--fault-2); }
+  .control-group label .val.phantom-color { color: var(--phantom); }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--slider-track);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--slider-fill);
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    cursor: grab;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--slider-fill);
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    cursor: grab;
+  }
+  input[type="range"].fault-1 { --slider-fill: var(--fault-1); }
+  input[type="range"].fault-2 { --slider-fill: var(--fault-2); }
+  input[type="range"].phantom-slider { --slider-fill: var(--phantom); }
+
+  input[type="number"] {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    background: var(--input-bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    width: 90px;
+    outline: none;
+  }
+  input[type="number"]:focus {
+    border-color: var(--wire);
+  }
+
+  /* Results */
+  .results-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  .result-tile {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 0.85rem;
+    min-width: 0;
+  }
+  .result-tile .tile-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-label);
+    margin-bottom: 0.2rem;
+  }
+  .result-tile .tile-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .result-tile .tile-unit {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--fg-muted);
+    margin-left: 0.15rem;
+  }
+  .result-tile .tile-sub {
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+    margin-top: 0.15rem;
+  }
+  .result-tile.phantom-tile {
+    border-color: var(--phantom);
+    background: var(--phantom-glow);
+  }
+  .result-tile.phantom-tile .tile-value { color: var(--phantom); }
+
+  /* Explanation panel */
+  .explain {
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: var(--fg-muted);
+  }
+  .explain strong { color: var(--fg); font-weight: 600; }
+  .formula-box {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.65rem 0.85rem;
+    margin: 0.5rem 0;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .formula-box .f-label {
+    color: var(--fg-label);
+    font-size: 0.7rem;
+  }
+
+  /* Scenario toggle */
+  .scenario-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .scenario-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.4rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--fg-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .scenario-btn:hover { border-color: var(--wire); color: var(--fg); }
+  .scenario-btn.active {
+    background: var(--wire);
+    color: #fff;
+    border-color: var(--wire);
+  }
+
+  /* Inline-Param Row */
+  .param-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: end;
+    margin-bottom: 0.75rem;
+  }
+  .param-row .control-group { flex: 1; min-width: 120px; }
+
+  /* Tooltip */
+  .info-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 0.25rem;
+  }
+  .info-tag.fault-1 { background: var(--fault-1); color: #fff; }
+  .info-tag.fault-2 { background: var(--fault-2); color: #fff; }
+  .info-tag.phantom { background: var(--phantom); color: #fff; }
+
+  /* Animation for phantom marker */
+  @keyframes pulse-phantom {
+    0%, 100% { opacity: 0.3; r: 18; }
+    50% { opacity: 0.12; r: 28; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  /* Print-friendly */
+  @media print {
+    body { background: #fff; color: #000; }
+    .card { box-shadow: none; border: 1px solid #ccc; }
+  }
+</style>
+
+<h1>Phantomfehler-Simulation</h1>
+<p class="subtitle">Spannungsteilermessung bei Doppelfehler auf FW-Messschleife &middot; Brandesdraht 5,8 &Omega;/m</p>
+
+<!-- Diagram -->
+<div class="card">
+  <div class="card-label">Leitungsschema mit Fehlerortung</div>
+  <div class="diagram-wrap">
+    <svg class="pipe-diagram" id="pipeSvg" viewBox="0 0 860 210" xmlns="http://www.w3.org/2000/svg" aria-label="Rohrdiagramm mit Fehlerpositionen"></svg>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="card">
+  <div class="card-label">Messergebnis</div>
+  <div class="results-row" id="results">
+    <div class="result-tile">
+      <div class="tile-label">Fehler 1 <span class="info-tag fault-1">F1</span></div>
+      <div class="tile-value" id="resD1">30,0<span class="tile-unit">m</span></div>
+      <div class="tile-sub" id="resRf1">Rf = 50 kΩ</div>
+    </div>
+    <div class="result-tile">
+      <div class="tile-label">Fehler 2 <span class="info-tag fault-2">F2</span></div>
+      <div class="tile-value" id="resD2">70,0<span class="tile-unit">m</span></div>
+      <div class="tile-sub" id="resRf2">Rf = 50 kΩ</div>
+    </div>
+    <div class="result-tile phantom-tile">
+      <div class="tile-label">Gemessene Position <span class="info-tag phantom">Phantom</span></div>
+      <div class="tile-value" id="resPhantom">50,0<span class="tile-unit">m</span></div>
+      <div class="tile-sub" id="resPhantomSub">Abweichung: ±20,0 m</div>
+    </div>
+    <div class="result-tile">
+      <div class="tile-label">R von Ende A</div>
+      <div class="tile-value" id="resRA">—<span class="tile-unit">Ω</span></div>
+      <div class="tile-sub" id="resRASub"></div>
+    </div>
+    <div class="result-tile">
+      <div class="tile-label">R von Ende B</div>
+      <div class="tile-value" id="resRB">—<span class="tile-unit">Ω</span></div>
+      <div class="tile-sub" id="resRBSub"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="card">
+  <div class="card-label">Parameter</div>
+
+  <div class="scenario-bar">
+    <button class="scenario-btn active" data-scenario="equal">Gleiche Rf</button>
+    <button class="scenario-btn" data-scenario="asymmetric">Rf₁ ≪ Rf₂</button>
+    <button class="scenario-btn" data-scenario="low-both">Beide niedrig</button>
+    <button class="scenario-btn" data-scenario="custom">Frei einstellen</button>
+  </div>
+
+  <div class="param-row">
+    <div class="control-group">
+      <label>Leitungslänge <span class="val" id="valL">100</span> m</label>
+      <input type="range" id="sliderL" min="20" max="500" step="5" value="100">
+    </div>
+    <div class="control-group">
+      <label>Draht r <span class="val" id="valR">5,8</span> Ω/m</label>
+      <input type="number" id="inputR" min="0.1" max="20" step="0.1" value="5.8">
+    </div>
+  </div>
+
+  <div class="controls-grid">
+    <div class="control-group">
+      <label>Fehler 1 Position <span class="val fault-1-color" id="valD1">30</span> m</label>
+      <input type="range" class="fault-1" id="sliderD1" min="0" max="99" step="1" value="30">
+    </div>
+    <div class="control-group">
+      <label>Fehler 1 Rf <span class="val fault-1-color" id="valRf1">50 kΩ</span></label>
+      <input type="range" class="fault-1" id="sliderRf1" min="0" max="1000" step="1" value="500">
+    </div>
+    <div class="control-group">
+      <label>Fehler 2 Position <span class="val fault-2-color" id="valD2">70</span> m</label>
+      <input type="range" class="fault-2" id="sliderD2" min="1" max="100" step="1" value="70">
+    </div>
+    <div class="control-group">
+      <label>Fehler 2 Rf <span class="val fault-2-color" id="valRf2">50 kΩ</span></label>
+      <input type="range" class="fault-2" id="sliderRf2" min="0" max="1000" step="1" value="500">
+    </div>
+  </div>
+</div>
+
+<!-- Explanation -->
+<div class="card">
+  <div class="card-label">Physikalischer Hintergrund</div>
+  <div class="explain" id="explainText">
+    <p>
+      <strong>Bei einem einzelnen Fehler</strong> liefert die Spannungsteilermessung eine exakte Ortung — der Isolationswiderstand Rf kürzt sich aus der Gleichung heraus.
+    </p>
+    <p>
+      <strong>Bei zwei Fehlern</strong> sieht das Messgerät von jedem Ende eine Parallelschaltung: den direkten Weg über den näheren Fehler und den Umweg über den Drahtwiderstand zum zweiten Fehler. Das Gerät berechnet eine <em>scheinbare</em> Position, die weder Fehler 1 noch Fehler 2 entspricht.
+    </p>
+    <div class="formula-box">
+      <div class="f-label">Messung von Ende A</div>
+      R<sub>A</sub> = r·d₁ + Rf₁ ‖ (r·Δd + Rf₂)
+    </div>
+    <div class="formula-box">
+      <div class="f-label">Messung von Ende B</div>
+      R<sub>B</sub> = r·(L−d₂) + Rf₂ ‖ (r·Δd + Rf₁)
+    </div>
+    <div class="formula-box">
+      <div class="f-label">Phantomposition</div>
+      d<sub>phantom</sub> = (d₁+d₂)/2 + (d₂−d₁)·(Rf₁−Rf₂) / (2·(Rf₁+Rf₂+r·Δd))
+    </div>
+    <p>
+      Der Phantomfehler liegt <strong>immer zwischen den beiden realen Fehlern</strong>. Er wird zum Fehler mit dem <strong>niedrigeren Rf</strong> hingezogen — denn dieser leitet stärker und dominiert die Messung.
+    </p>
+    <p>
+      <strong>Konsequenz für die Praxis:</strong> Eine Schadenöffnung an der gemessenen Position trifft keinen der beiden Fehler. Erst nach dem Auftrennen der Messschleife an dieser Stelle können die beiden Teilschleifen unabhängig gemessen werden — jede liefert dann eine korrekte Einzelortung.
+    </p>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // --- State ---
+  const state = {
+    L: 100,
+    r: 5.8,
+    d1: 30,
+    d2: 70,
+    Rf1: 50000,   // 50 kΩ
+    Rf2: 50000    // 50 kΩ
+  };
+
+  // --- Logarithmic Rf mapping ---
+  // Real range: 2 kΩ (2000 Ω) … 100 MΩ (1e8 Ω)
+  // Slider raw: 0 … 1000
+  const RF_MIN = 2000;        // 2 kΩ
+  const RF_MAX = 100000000;   // 100 MΩ
+  const LOG_MIN = Math.log10(RF_MIN);  // ≈3.301
+  const LOG_MAX = Math.log10(RF_MAX);  // 8.0
+  const LOG_SPAN = LOG_MAX - LOG_MIN;  // ≈4.699
+
+  function sliderToRf(pos) {
+    return Math.round(Math.pow(10, LOG_MIN + (pos / 1000) * LOG_SPAN));
+  }
+  function rfToSlider(rf) {
+    if (rf <= RF_MIN) return 0;
+    if (rf >= RF_MAX) return 1000;
+    return Math.round(((Math.log10(rf) - LOG_MIN) / LOG_SPAN) * 1000);
+  }
+  function formatRf(ohm) {
+    if (ohm >= 1e6) {
+      const v = ohm / 1e6;
+      return v >= 10 ? `${Math.round(v)} MΩ` : `${v.toFixed(1)} MΩ`;
+    }
+    if (ohm >= 1000) {
+      const v = ohm / 1000;
+      return v >= 10 ? `${Math.round(v)} kΩ` : `${v.toFixed(1)} kΩ`;
+    }
+    return `${Math.round(ohm)} Ω`;
+  }
+
+  // --- DOM refs ---
+  const $ = id => document.getElementById(id);
+  const sliderL = $('sliderL'), sliderD1 = $('sliderD1'), sliderD2 = $('sliderD2');
+  const sliderRf1 = $('sliderRf1'), sliderRf2 = $('sliderRf2'), inputR = $('inputR');
+  const svg = $('pipeSvg');
+
+  // --- Scenarios ---
+  // Rf-Werte in realistischen Bereichen:
+  // 2–5 kΩ = schwerer Nässeschaden (Kurzschluss über Nässebrücke)
+  // 50 kΩ = mittlerer Fehler
+  // 1–100 MΩ = leichter / beginnender Fehler
+  const scenarios = {
+    equal:     { d1: 30, d2: 70, Rf1: 50000,   Rf2: 50000,    L: 100 },
+    asymmetric:{ d1: 30, d2: 70, Rf1: 3000,    Rf2: 2000000,  L: 100 },
+    'low-both':{ d1: 25, d2: 75, Rf1: 2500,    Rf2: 5000,     L: 100 },
+    custom: null
+  };
+
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const s = scenarios[btn.dataset.scenario];
+      if (s) {
+        state.L = s.L; state.d1 = s.d1; state.d2 = s.d2;
+        state.Rf1 = s.Rf1; state.Rf2 = s.Rf2;
+        syncSlidersFromState();
+        update();
+      }
+    });
+  });
+
+  // --- Physics ---
+  function parallel(a, b) {
+    if (a <= 0 && b <= 0) return 0;
+    if (a <= 0) return 0;
+    if (b <= 0) return 0;
+    return (a * b) / (a + b);
+  }
+
+  function compute() {
+    const { L, r, d1, d2, Rf1, Rf2 } = state;
+    const dd = d2 - d1; // distance between faults
+
+    // Effective resistances from each end
+    const R_A = r * d1 + parallel(Rf1, r * dd + Rf2);
+    const R_B = r * (L - d2) + parallel(Rf2, r * dd + Rf1);
+
+    // Instrument formula (single-fault assumption)
+    const d_phantom = L / 2 + (R_A - R_B) / (2 * r);
+
+    return { R_A, R_B, d_phantom, dd };
+  }
+
+  // --- SVG Rendering ---
+  function drawPipe() {
+    const { L, d1, d2, Rf1, Rf2 } = state;
+    const res = compute();
+    const dp = res.d_phantom;
+
+    const W = 860, H = 210;
+    const margin = { left: 55, right: 55, top: 30, bottom: 50 };
+    const pipeY = 85;
+    const pipeH = 32;
+    const wireY = pipeY + pipeH + 14;
+    const pipeW = W - margin.left - margin.right;
+
+    const x = m => margin.left + (m / L) * pipeW;
+
+    // Clamp phantom for display
+    const dpClamped = Math.max(0, Math.min(L, dp));
+
+    let s = '';
+
+    // --- Defs ---
+    s += `<defs>
+      <linearGradient id="pipeGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--pipe-light)"/>
+        <stop offset="50%" stop-color="var(--pipe)"/>
+        <stop offset="100%" stop-color="var(--pipe-light)"/>
+      </linearGradient>
+      <linearGradient id="insulGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--insulation)" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="var(--insulation)" stop-opacity="0.3"/>
+      </linearGradient>
+    </defs>`;
+
+    // --- Scale / ruler ---
+    const ticks = [];
+    let step = 10;
+    if (L > 200) step = 50;
+    else if (L > 100) step = 20;
+    for (let m = 0; m <= L; m += step) ticks.push(m);
+    if (ticks[ticks.length - 1] !== L) ticks.push(L);
+
+    for (const m of ticks) {
+      const tx = x(m);
+      s += `<line x1="${tx}" y1="${pipeY + pipeH + 38}" x2="${tx}" y2="${pipeY + pipeH + 44}" stroke="var(--fg-label)" stroke-width="1"/>`;
+      s += `<text x="${tx}" y="${pipeY + pipeH + 56}" text-anchor="middle" fill="var(--fg-label)" font-family="'JetBrains Mono',monospace" font-size="9">${m}m</text>`;
+    }
+    s += `<line x1="${margin.left}" y1="${pipeY + pipeH + 42}" x2="${margin.left + pipeW}" y2="${pipeY + pipeH + 42}" stroke="var(--fg-label)" stroke-width="0.5" stroke-dasharray="2,3"/>`;
+
+    // --- Insulation (outer casing) ---
+    s += `<rect x="${margin.left}" y="${pipeY - 8}" width="${pipeW}" height="${pipeH + 16}" rx="8" fill="url(#insulGrad)" stroke="var(--border)" stroke-width="0.5"/>`;
+
+    // --- Steel pipe ---
+    s += `<rect x="${margin.left}" y="${pipeY}" width="${pipeW}" height="${pipeH}" rx="4" fill="url(#pipeGrad)"/>`;
+
+    // --- Labels A / B ---
+    s += `<text x="${margin.left - 10}" y="${pipeY + pipeH/2 + 4}" text-anchor="end" fill="var(--fg)" font-family="'JetBrains Mono',monospace" font-size="13" font-weight="700">A</text>`;
+    s += `<text x="${margin.left + pipeW + 10}" y="${pipeY + pipeH/2 + 4}" text-anchor="start" fill="var(--fg)" font-family="'JetBrains Mono',monospace" font-size="13" font-weight="700">B</text>`;
+
+    // --- Wire (Brandesdraht) ---
+    s += `<line x1="${margin.left}" y1="${wireY}" x2="${margin.left + pipeW}" y2="${wireY}" stroke="var(--wire)" stroke-width="2.5" stroke-linecap="round"/>`;
+    s += `<text x="${margin.left - 10}" y="${wireY + 4}" text-anchor="end" fill="var(--wire)" font-family="'JetBrains Mono',monospace" font-size="8">FHK</text>`;
+
+    // --- Fault 1 ---
+    const x1 = x(d1);
+    // Connection line from wire to pipe (fault path)
+    s += `<line x1="${x1}" y1="${wireY}" x2="${x1}" y2="${pipeY + pipeH}" stroke="var(--fault-1)" stroke-width="2" stroke-dasharray="4,3"/>`;
+    // Fault marker on wire
+    s += `<circle cx="${x1}" cy="${wireY}" r="5" fill="var(--fault-1)" stroke="var(--bg-card)" stroke-width="1.5"/>`;
+    // Label
+    s += `<text x="${x1}" y="${wireY - 14}" text-anchor="middle" fill="var(--fault-1)" font-family="'JetBrains Mono',monospace" font-size="10" font-weight="600">F1</text>`;
+    s += `<text x="${x1}" y="${wireY - 4}" text-anchor="middle" fill="var(--fault-1)" font-family="'JetBrains Mono',monospace" font-size="8">${d1}m</text>`;
+    // Rf label
+    s += `<text x="${x1 + 6}" y="${pipeY + pipeH + 10}" text-anchor="start" fill="var(--fault-1)" font-family="'JetBrains Mono',monospace" font-size="7.5">${formatRf(Rf1)}</text>`;
+
+    // --- Fault 2 ---
+    const x2 = x(d2);
+    s += `<line x1="${x2}" y1="${wireY}" x2="${x2}" y2="${pipeY + pipeH}" stroke="var(--fault-2)" stroke-width="2" stroke-dasharray="4,3"/>`;
+    s += `<circle cx="${x2}" cy="${wireY}" r="5" fill="var(--fault-2)" stroke="var(--bg-card)" stroke-width="1.5"/>`;
+    s += `<text x="${x2}" y="${wireY - 14}" text-anchor="middle" fill="var(--fault-2)" font-family="'JetBrains Mono',monospace" font-size="10" font-weight="600">F2</text>`;
+    s += `<text x="${x2}" y="${wireY - 4}" text-anchor="middle" fill="var(--fault-2)" font-family="'JetBrains Mono',monospace" font-size="8">${d2}m</text>`;
+    s += `<text x="${x2 + 6}" y="${pipeY + pipeH + 10}" text-anchor="start" fill="var(--fault-2)" font-family="'JetBrains Mono',monospace" font-size="7.5">${formatRf(Rf2)}</text>`;
+
+    // --- Phantom fault marker ---
+    const xp = x(dpClamped);
+    // Glow
+    s += `<circle cx="${xp}" cy="${pipeY + pipeH/2}" r="18" fill="var(--phantom-glow)">
+      <animate attributeName="r" values="18;28;18" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite"/>
+    </circle>`;
+    // Arrow down from top
+    s += `<line x1="${xp}" y1="${pipeY - 20}" x2="${xp}" y2="${pipeY - 10}" stroke="var(--phantom)" stroke-width="2" marker-end="url(#arrowPhantom)"/>`;
+    s += `<defs><marker id="arrowPhantom" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--phantom)"/>
+    </marker></defs>`;
+    // Diamond marker
+    s += `<polygon points="${xp},${pipeY - 26} ${xp + 7},${pipeY - 33} ${xp},${pipeY - 40} ${xp - 7},${pipeY - 33}" fill="var(--phantom)" stroke="var(--bg-card)" stroke-width="1"/>`;
+    // Label
+    s += `<text x="${xp}" y="${pipeY - 46}" text-anchor="middle" fill="var(--phantom)" font-family="'JetBrains Mono',monospace" font-size="11" font-weight="700">${dpClamped.toFixed(1)}m</text>`;
+    s += `<text x="${xp}" y="${16}" text-anchor="middle" fill="var(--phantom)" font-family="'DM Sans',sans-serif" font-size="9" font-weight="600">GEMESSENE POSITION</text>`;
+
+    // --- Range bracket showing the error zone ---
+    const bracketY = pipeY - 54;
+    if (Math.abs(x1 - x2) > 10) {
+      const bLeft = Math.min(x1, x2);
+      const bRight = Math.max(x1, x2);
+      s += `<line x1="${bLeft}" y1="${bracketY}" x2="${bRight}" y2="${bracketY}" stroke="var(--phantom)" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>`;
+      s += `<line x1="${bLeft}" y1="${bracketY - 3}" x2="${bLeft}" y2="${bracketY + 3}" stroke="var(--phantom)" stroke-width="1" opacity="0.5"/>`;
+      s += `<line x1="${bRight}" y1="${bracketY - 3}" x2="${bRight}" y2="${bracketY + 3}" stroke="var(--phantom)" stroke-width="1" opacity="0.5"/>`;
+    }
+
+    svg.innerHTML = s;
+  }
+
+  // --- Update results ---
+  function updateResults() {
+    const { L, d1, d2, Rf1, Rf2 } = state;
+    const { R_A, R_B, d_phantom } = compute();
+    const dpClamped = Math.max(0, Math.min(L, d_phantom));
+
+    $('resD1').innerHTML = `${d1.toFixed(1)}<span class="tile-unit">m</span>`;
+    $('resRf1').textContent = `Rf = ${formatRf(Rf1)}`;
+    $('resD2').innerHTML = `${d2.toFixed(1)}<span class="tile-unit">m</span>`;
+    $('resRf2').textContent = `Rf = ${formatRf(Rf2)}`;
+    $('resPhantom').innerHTML = `${dpClamped.toFixed(1)}<span class="tile-unit">m</span>`;
+
+    const errMin = Math.min(Math.abs(dpClamped - d1), Math.abs(dpClamped - d2)).toFixed(1);
+    const errMax = Math.max(Math.abs(dpClamped - d1), Math.abs(dpClamped - d2)).toFixed(1);
+    $('resPhantomSub').textContent = `Abweichung: ${errMin}–${errMax} m von den realen Fehlern`;
+
+    $('resRA').innerHTML = `${R_A.toFixed(1)}<span class="tile-unit">Ω</span>`;
+    $('resRASub').textContent = `Draht: ${(state.r * d1).toFixed(0)} Ω + Fehler`;
+    $('resRB').innerHTML = `${R_B.toFixed(1)}<span class="tile-unit">Ω</span>`;
+    $('resRBSub').textContent = `Draht: ${(state.r * (L - d2)).toFixed(0)} Ω + Fehler`;
+  }
+
+  // --- Sync sliders from state ---
+  function syncSlidersFromState() {
+    sliderL.value = state.L;
+    sliderL.max = 500;
+    $('valL').textContent = state.L;
+
+    // Adjust slider ranges based on L
+    sliderD1.max = state.L - 1;
+    sliderD2.max = state.L;
+    sliderD1.value = state.d1;
+    sliderD2.value = state.d2;
+
+    // Logarithmic Rf sliders
+    sliderRf1.value = rfToSlider(state.Rf1);
+    sliderRf2.value = rfToSlider(state.Rf2);
+
+    $('valD1').textContent = state.d1;
+    $('valD2').textContent = state.d2;
+    $('valRf1').textContent = formatRf(state.Rf1);
+    $('valRf2').textContent = formatRf(state.Rf2);
+    $('valR').textContent = state.r.toFixed(1).replace('.', ',');
+  }
+
+  // --- Update everything ---
+  function update() {
+    drawPipe();
+    updateResults();
+  }
+
+  // --- Slider events ---
+  function handleSlider(slider, valEl, key, formatter) {
+    const handler = () => {
+      let v = parseFloat(slider.value);
+      state[key] = v;
+
+      // Ensure d1 < d2
+      if (key === 'd1' && state.d1 >= state.d2) {
+        state.d2 = state.d1 + 1;
+        if (state.d2 > state.L) { state.d2 = state.L; state.d1 = state.L - 1; }
+        sliderD2.value = state.d2;
+        $('valD2').textContent = formatter ? formatter(state.d2) : state.d2;
+      }
+      if (key === 'd2' && state.d2 <= state.d1) {
+        state.d1 = state.d2 - 1;
+        if (state.d1 < 0) { state.d1 = 0; state.d2 = 1; }
+        sliderD1.value = state.d1;
+        $('valD1').textContent = formatter ? formatter(state.d1) : state.d1;
+      }
+      if (key === 'L') {
+        if (state.d1 >= state.L) state.d1 = state.L - 2;
+        if (state.d2 >= state.L) state.d2 = state.L - 1;
+        if (state.d1 < 0) state.d1 = 0;
+        if (state.d2 <= state.d1) state.d2 = state.d1 + 1;
+        sliderD1.max = state.L - 1;
+        sliderD2.max = state.L;
+        sliderD1.value = state.d1;
+        sliderD2.value = state.d2;
+        $('valD1').textContent = state.d1;
+        $('valD2').textContent = state.d2;
+      }
+
+      valEl.textContent = formatter ? formatter(v) : v;
+
+      // Switch to custom scenario
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-scenario="custom"]').classList.add('active');
+
+      update();
+    };
+    slider.addEventListener('input', handler);
+  }
+
+  handleSlider(sliderL, $('valL'), 'L');
+  handleSlider(sliderD1, $('valD1'), 'd1');
+  handleSlider(sliderD2, $('valD2'), 'd2');
+
+  // Logarithmic Rf slider handlers
+  function handleRfSlider(slider, valEl, key) {
+    slider.addEventListener('input', () => {
+      const pos = parseFloat(slider.value);
+      state[key] = sliderToRf(pos);
+      valEl.textContent = formatRf(state[key]);
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-scenario="custom"]').classList.add('active');
+      update();
+    });
+  }
+  handleRfSlider(sliderRf1, $('valRf1'), 'Rf1');
+  handleRfSlider(sliderRf2, $('valRf2'), 'Rf2');
+
+  inputR.addEventListener('input', () => {
+    let v = parseFloat(inputR.value);
+    if (isNaN(v) || v <= 0) v = 5.8;
+    state.r = v;
+    $('valR').textContent = v.toFixed(1).replace('.', ',');
+    update();
+  });
+
+  // --- Init ---
+  syncSlidersFromState();
+  update();
+})();
+</script>
